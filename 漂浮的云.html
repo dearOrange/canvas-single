@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="UTF-8">
+		<title>云</title>
+		<style>
+			html,
+			body {
+				height: 100%;
+				width: 100%;
+				margin: 0;
+				padding: 0;
+				background-color: #999;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+
+	<body>
+		<canvas id="canvas"></canvas>
+		<script>
+			//typeof Object.extend 与 'function' 类型不同，所以返回 true
+			if(typeof Object.extend !== 'function') {
+				Object.extend = function(d, s) {
+					for(var k in s) {
+						//每次循环，K分别是：count，puffRadius，opacity
+						if(s.hasOwnProperty(k)) { //hasOwnProperty 返回一个布尔值
+							var v = s[k];
+							if(d.hasOwnProperty(k) && typeof d[k] === "object" && typeof v === "object") {
+								Object.extend(d[k], v);
+							} else {
+								d[k] = v;
+							}
+						}
+					}
+					return d;
+				};
+			}
+
+			//云 函数
+			function Cloud(properties) {
+				//默认变量对象
+				var defaults = {
+					puffRadius: 32,
+					puffColor: {
+						r: 255,
+						g: 255,
+						b: 255
+					},
+					opacity: 0.33,
+					count: 32
+				};
+				//将 defaults 默认变量对象 和 随机 properties 变量对象 传参到 Object.extend 并 return
+				properties = Object.extend(defaults, typeof properties === 'undefined' ? {} : properties);
+				this.count = properties.count;
+				this.points = [];
+				this.minX = 0;
+				this.minY = 0;
+				this.maxX = 0;
+				this.maxY = 0;
+				this.puff = new Puff({
+					radius: properties.puffRadius,
+					color: properties.puffColor,
+					opacity: properties.opacity
+				});
+				//创建图形元素
+				this.img = document.createElement('canvas');
+				this.ctx = this.img.getContext('2d');
+				//循环默认数量（32）
+				for(var i = 0; i < this.count; i++) {
+					var seed = Math.random(); //赋随机值
+					var x = seed * (properties.puffRadius + seed) * Math.cos(1 + i + seed) * Math.PI; //余弦
+					var y = seed * (properties.puffRadius + seed) * Math.sin(1 + i + seed) * Math.PI / 2; //正弦
+					this.minX = Math.min(this.minX, x - properties.puffRadius);
+					this.maxX = Math.max(this.maxX, x + properties.puffRadius);
+					this.minY = Math.min(this.minY, y - properties.puffRadius);
+					this.maxY = Math.max(this.maxY, y + properties.puffRadius);
+					//将X,Y添加到 points 数组中
+					this.points.push([x, y]);
+				}
+				//从新定义图形元素宽，高
+				this.img.height = (this.maxY - this.minY) + properties.puffRadius * 2;
+				this.img.width = (this.maxX - this.minX) + properties.puffRadius * 2;
+				//执行渲染函数
+				this.render();
+			}
+
+			//云朵函数
+			function Puff(properties) {
+				var color = function(obj) {
+						return obj.r + ',' + obj.g + ',' + obj.b;
+					}
+					//创建图形元素
+				this.img = document.createElement('canvas');
+				var context = this.img.getContext('2d');
+				//设置宽高
+				this.img.height = this.img.width = properties.radius * 2;
+				//放射渐变
+				var grad = context.createRadialGradient(properties.radius, properties.radius, 0, properties.radius, properties.radius, properties.radius);
+				grad.addColorStop(0, 'rgba(' + color(properties.color) + ',' + properties.opacity + ')');
+				grad.addColorStop(1, 'rgba(' + color(properties.color) + ',0)');
+				context.fillStyle = grad;
+				//绘制放射渐变填充的圆形
+				context.beginPath();
+				context.arc(properties.radius, properties.radius, properties.radius, 0, Math.PI * 2, true);
+				context.fill();
+				context.closePath();
+			}
+			Cloud.prototype = {
+				constructor: Cloud,
+				render: function() {
+					var cX = this.img.width / 2 - this.puff.img.width / 2,
+						cY = this.img.height / 2 - this.puff.img.height / 2;
+					for(var i = 0; i < this.count; i++) {
+						//循环绘制图像，并指定 cX 与 cY 坐标
+						this.ctx.drawImage(this.puff.img, cX + this.points[i][0], cY + this.points[i][1]);
+					}
+				}
+			};
+
+			//初始变量
+			var canvas = document.getElementById('canvas'),
+				context = canvas.getContext('2d'),
+				height = canvas.height = document.body.offsetHeight,
+				width = canvas.width = document.body.offsetWidth,
+				clouds = [],
+				speed = 1.11, //云的移动速度
+				cloudCount = width * .2666666 //云的数量
+			setTimeout(init, 10); //执行初始化函数
+
+			//初始化函数
+			function init() {
+				for(var i = 0; i < cloudCount; i++) {
+					var count = Math.random() * 64 + 32,
+						rad = Math.random() * 32 + 32,
+						cloud = new Cloud({
+							count: count, //随机数量
+							puffRadius: rad, //随机半径
+							opacity: Math.random() * 0.1 //随机透明度
+						});
+					cloud.x = Math.random() * (width * 2) - width; //随机X轴坐标
+					cloud.y = cloud.img.height - Math.random() * height / 2; //随机Y轴坐标
+					cloud.speed = speed * .6 + Math.random() * (speed * .4); //随机速度
+					//向 clouds 数组添加 cloud
+					clouds.push(cloud);
+				}
+				update();
+				render();
+			}
+
+			//更新函数
+			function update() {
+				for(var i = 0; i < cloudCount; i++) {
+					if(clouds[i].x + clouds[i].img.width < 0) {
+						clouds[i].x = width + clouds[i].img.width;
+					} else {
+						clouds[i].x -= clouds[i].speed;
+					}
+				}
+				setTimeout(update, 1000 / 30);
+			}
+
+			//渲染函数
+			function render() {
+				requestAnimationFrame(render);
+				context.clearRect(0, 0, width, height); //清空矩形
+				//判断 i < 云的个数，绘制图像
+				for(var i = 0; i < cloudCount; i++) {
+					context.drawImage(clouds[i].img, clouds[i].x - clouds[i].img.width / 2, clouds[i].y - clouds[i].img.height / 2);
+				}
+			}
+		</script>
+	</body>
+
+</html>
